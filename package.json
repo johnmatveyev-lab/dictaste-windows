@@ -1,0 +1,29 @@
+{
+  "name": "dictaste-windows",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dictaste for Windows — hold-to-talk MVP",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win --x64",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "com.dictaste.windows",
+    "productName": "Dictaste",
+    "directories": { "output": "dist" },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "Dictaste-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

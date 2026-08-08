@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dictaste</title>
+  <style>
+    :root { --bg:#0A0A0B; --fg:#fff; --muted:#A1A1A6; --lime:#C8F542; --border:#2A2A2E; --surface:#141416; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Inter, system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:20px; }
+    h1 { font-size:1.25rem; margin:0 0 4px; letter-spacing:-0.03em; }
+    .tag { color:var(--lime); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.12em; }
+    label { display:block; font-size:0.75rem; color:var(--muted); margin:12px 0 6px; }
+    input, textarea { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--fg); padding:10px 12px; font:inherit; }
+    textarea { min-height:100px; resize:vertical; }
+    .row { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+    button { background:var(--lime); color:#0A0A0B; border:none; border-radius:8px; padding:10px 14px; font-weight:600; cursor:pointer; }
+    button.ghost { background:transparent; color:var(--fg); border:1px solid var(--lime); }
+    .hint { font-size:0.8rem; color:var(--muted); margin-top:10px; line-height:1.45; }
+    #status { font-size:0.8rem; color:var(--lime); min-height:1.2em; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="tag">Dictaste · Windows MVP</div>
+  <h1>Speak it. Ship it.</h1>
+  <p class="hint">Ctrl+Shift+Space toggles listen mode. Paste raw transcript below to polish + insert (full mic STT ships next build).</p>
+  <div id="status"></div>
+  <label>License key (from dictaste.vercel.app/dashboard)</label>
+  <input id="license" placeholder="fd_live_…" />
+  <label>API base</label>
+  <input id="api" placeholder="https://dictaste.vercel.app" />
+  <label>Raw text → polish → paste</label>
+  <textarea id="text" placeholder="Dictate or type here…"></textarea>
+  <div class="row">
+    <button id="save">Save settings</button>
+    <button id="run" class="ghost">Polish & paste</button>
+    <button id="dash" class="ghost">Dashboard</button>
+  </div>
+  <p class="hint">Same Free / Developer / Pro plans as Mac. Highlight-to-speak coming after W0 hotkey STT.</p>
+  <script>
+    async function boot() {
+      const c = await window.dictaste.getConfig();
+      document.getElementById('license').value = c.licenseKey || '';
+      document.getElementById('api').value = c.apiBase || 'https://dictaste.vercel.app';
+      window.dictaste.onStatus((s) => {
+        document.getElementById('status').textContent = s.listening ? 'Listening…' : 'Ready';
+      });
+    }
+    document.getElementById('save').onclick = async () => {
+      await window.dictaste.saveConfig({
+        licenseKey: document.getElementById('license').value.trim(),
+        apiBase: document.getElementById('api').value.trim() || 'https://dictaste.vercel.app',
+      });
+      document.getElementById('status').textContent = 'Saved';
+    };
+    document.getElementById('run').onclick = async () => {
+      const t = document.getElementById('text').value;
+      const out = await window.dictaste.polishAndPaste(t);
+      document.getElementById('text').value = out;
+      document.getElementById('status').textContent = 'Polished & paste sent';
+    };
+    document.getElementById('dash').onclick = () => {
+      const api = document.getElementById('api').value.trim() || 'https://dictaste.vercel.app';
+      window.dictaste.openExternal(api.replace(/\/$/, '') + '/dashboard');
+    };
+    boot();
+  </script>
+</body>
+</html>
