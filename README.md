@@ -1,33 +1,45 @@
-# Dictaste for Windows (MVP + W1 STT)
+# Dictaste for Windows
 
-Hold-to-talk + license polish against **https://dictaste.vercel.app**.
+Tray app — hold-to-talk dictation + AI polish via **https://dictaste.vercel.app**.
 
-## Status
-- Tray app with brand tooltip
-- Global hotkey `Ctrl+Shift+Space` → floating HUD
-- **STT engines (W1)**
-  - `webspeech` — Chromium Web Speech (default)
-  - `openai` — OpenAI Whisper API (BYO `sk-…`)
-  - `whisper-cli` — offline [whisper.cpp](https://github.com/ggerganov/whisper.cpp) binary + ggml model path
-- Stop hotkey → STT → polish via `/api/v1/polish` → auto-paste (Ctrl+V)
-- Settings: license, API base, STT mode, Whisper keys/paths
+**★ Free Developer plan:** star [johnmatveyev-lab/dictaste](https://github.com/johnmatveyev-lab/dictaste) → unlock at https://dictaste.vercel.app/developers/setup  
 
-## Dev
-```bash
+Full install guide: https://github.com/johnmatveyev-lab/dictaste/blob/main/docs/INSTALL_WINDOWS.md
+
+## Quick start
+
+```powershell
+git clone https://github.com/johnmatveyev-lab/dictaste-windows.git
+cd dictaste-windows
 npm install
 npm start
 ```
 
+1. Tray → **Settings**  
+2. Paste license key (`dt_live_…`)  
+3. Optional: OpenAI key for polish / Whisper  
+4. **Ctrl+Shift+Space** to start/stop listening  
+
+## Features
+
+- Global hotkey `Ctrl+Shift+Space` → floating HUD  
+- STT: Web Speech · OpenAI Whisper · offline whisper.cpp  
+- Polish via `/api/v1/polish` · auto-paste  
+- Settings: license, API base, STT mode  
+
 ## Package installer (on Windows)
-```bash
+
+```powershell
 npm run dist
+# → dist/Dictaste-Setup-0.1.0.exe
 ```
-Produces `dist/Dictaste-Setup-0.1.0.exe` (NSIS).
 
-## Offline whisper.cpp
-1. Build or download `whisper-cli` for Windows x64  
-2. Download a ggml model (e.g. `ggml-base.en.bin`)  
-3. Settings → STT = Offline whisper.cpp → set binary + model paths  
+## Verify (no Electron launch)
 
-## License
-Same keys as Mac from Dashboard / Developer setup (`dt_live_…` or legacy `fd_live_…`).
+```bash
+npm run verify
+```
+
+## License keys
+
+Same as Mac — from Dashboard / Developer setup (`dt_live_…` or legacy `fd_live_…`).
