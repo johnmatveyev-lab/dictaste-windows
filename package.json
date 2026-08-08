@@ -6,6 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "verify": "node scripts/verify-mvp.mjs",
     "pack": "electron-builder --win --x64",
     "dist": "electron-builder --win nsis --x64"
   },
