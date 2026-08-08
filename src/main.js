@@ -41,6 +41,12 @@ function defaultConfig() {
     licenseKey: "",
     polish: true,
     autoPaste: true,
+    /** webspeech | openai | whisper-cli */
+    sttMode: "webspeech",
+    openAIKey: "",
+    /** Absolute path to whisper.cpp `whisper-cli` or `main` binary (optional offline) */
+    whisperBin: "",
+    whisperModel: "",
   };
 }
 
@@ -120,6 +126,96 @@ async function polishText(text) {
     /* keep raw */
   }
   return text;
+}
+
+/**
+ * W1 STT: OpenAI Whisper API (BYO key) from webm/wav base64 payload.
+ */
+function transcribeOpenAI(base64, mime = "audio/webm") {
+  return new Promise((resolve, reject) => {
+    if (!cfg.openAIKey) {
+      reject(new Error("OpenAI key missing for Whisper STT"));
+      return;
+    }
+    const buf = Buffer.from(base64, "base64");
+    const boundary = "----DictasteBoundary" + Date.now();
+    const ext = mime.includes("wav") ? "wav" : mime.includes("mp4") ? "mp4" : "webm";
+    const preamble =
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="dictation.${ext}"\r\n` +
+      `Content-Type: ${mime}\r\n\r\n`;
+    const closing = `\r\n--${boundary}--\r\n`;
+    const body = Buffer.concat([
+      Buffer.from(preamble, "utf8"),
+      buf,
+      Buffer.from(closing, "utf8"),
+    ]);
+    const req = https.request(
+      {
+        hostname: "api.openai.com",
+        path: "/v1/audio/transcriptions",
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${cfg.openAIKey}`,
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": body.length,
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data || "{}");
+            if (res.statusCode === 200 && json.text) resolve(json.text);
+            else reject(new Error(json.error?.message || `Whisper HTTP ${res.statusCode}`));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/**
+ * W1 offline: spawn whisper.cpp if user configured binary + model.
+ * Expects 16kHz wav path.
+ */
+function transcribeWhisperCli(wavPath) {
+  return new Promise((resolve, reject) => {
+    const bin = cfg.whisperBin;
+    if (!bin || !fs.existsSync(bin)) {
+      reject(new Error("whisper-cli binary not configured"));
+      return;
+    }
+    const model = cfg.whisperModel;
+    const args = model
+      ? ["-m", model, "-f", wavPath, "-nt", "-np"]
+      : ["-f", wavPath, "-nt", "-np"];
+    exec(
+      `"${bin}" ${args.map((a) => `"${a}"`).join(" ")}`,
+      { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(new Error(stderr || err.message));
+          return;
+        }
+        const text = String(stdout || "")
+          .split("\n")
+          .map((l) => l.replace(/^\[[^\]]+\]\s*/, "").trim())
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        resolve(text);
+      }
+    );
+  });
 }
 
 function pasteText(text) {
@@ -204,9 +300,11 @@ async function startListening() {
   setTrayLabel();
   showHud();
   broadcastStatus({ phase: "listening" });
-  // Tell HUD to start Web Speech
   if (hudWin && !hudWin.isDestroyed()) {
-    hudWin.webContents.send("dictate-control", { action: "start" });
+    hudWin.webContents.send("dictate-control", {
+      action: "start",
+      sttMode: cfg.sttMode || "webspeech",
+    });
   }
   // Also open settings window if never opened so user can save license first session
   if (!cfg.licenseKey) {
@@ -235,8 +333,8 @@ function openSettings() {
     return;
   }
   settingsWin = new BrowserWindow({
-    width: 460,
-    height: 620,
+    width: 480,
+    height: 720,
     title: "Dictaste",
     backgroundColor: "#0A0A0B",
     webPreferences: {
@@ -301,12 +399,44 @@ app.whenReady().then(() => {
     return listening;
   });
 
-  /** HUD finished a session with transcript — polish + paste + notify */
-  ipcMain.handle("session-complete", async (_e, { text } = {}) => {
+  /** HUD finished a session with transcript and/or audio — STT + polish + paste */
+  ipcMain.handle("session-complete", async (_e, payload = {}) => {
     listening = false;
     setTrayLabel();
     hideHud();
-    const raw = String(text || "").trim();
+    let raw = String(payload.text || "").trim();
+    const mode = cfg.sttMode || "webspeech";
+
+    // Prefer audio STT when mode is openai / whisper-cli and audio present
+    if (!raw && payload.audioBase64) {
+      broadcastStatus({ phase: "transcribing" });
+      try {
+        if (mode === "openai") {
+          raw = await transcribeOpenAI(payload.audioBase64, payload.mime || "audio/webm");
+        } else if (mode === "whisper-cli") {
+          const tmp = path.join(
+            app.getPath("temp"),
+            `dictaste-${Date.now()}.${(payload.mime || "").includes("wav") ? "wav" : "webm"}`
+          );
+          fs.writeFileSync(tmp, Buffer.from(payload.audioBase64, "base64"));
+          try {
+            raw = await transcribeWhisperCli(tmp);
+          } finally {
+            try {
+              fs.unlinkSync(tmp);
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      } catch (e) {
+        notify(`STT failed: ${e.message || e}`);
+        broadcastStatus({ phase: "idle", last: "", error: String(e.message || e) });
+        return { polished: "", error: String(e.message || e) };
+      }
+    }
+
+    raw = String(raw || "").trim();
     if (!raw) {
       broadcastStatus({ phase: "idle", last: "" });
       return { polished: "" };

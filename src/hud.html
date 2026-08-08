@@ -52,6 +52,10 @@
     let rec = null;
     let finals = [];
     let interim = '';
+    let sttMode = 'webspeech';
+    let mediaRecorder = null;
+    let mediaChunks = [];
+    let mediaStream = null;
 
     function setUI(listening, msg) {
       document.getElementById('dot').className = 'dot' + (listening ? '' : ' idle');
@@ -59,14 +63,78 @@
       document.getElementById('sub').textContent = msg || (listening ? 'Speak now · hotkey to stop' : 'Ctrl+Shift+Space to dictate');
     }
 
-    function start() {
+    async function startMedia() {
+      mediaChunks = [];
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      mediaRecorder = new MediaRecorder(mediaStream, { mimeType: mime });
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size) mediaChunks.push(e.data);
+      };
+      mediaRecorder.start(250);
+    }
+
+    async function stopMedia() {
+      return new Promise((resolve) => {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+          cleanupStream();
+          resolve(null);
+          return;
+        }
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          cleanupStream();
+          const buf = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          resolve({ base64: btoa(binary), mime: blob.type || 'audio/webm' });
+        };
+        try { mediaRecorder.stop(); } catch (_) { resolve(null); }
+      });
+    }
+
+    function cleanupStream() {
+      try {
+        (mediaStream?.getTracks() || []).forEach((t) => t.stop());
+      } catch (_) {}
+      mediaStream = null;
+      mediaRecorder = null;
+    }
+
+    async function start(mode) {
+      sttMode = mode || 'webspeech';
       finals = [];
       interim = '';
       document.getElementById('partial').textContent = '';
+
+      // Always try MediaRecorder when using openai / whisper-cli
+      if (sttMode === 'openai' || sttMode === 'whisper-cli') {
+        try {
+          await startMedia();
+          setUI(true, sttMode === 'openai' ? 'Whisper (OpenAI)…' : 'Whisper CLI…');
+          return;
+        } catch (err) {
+          setUI(false, 'Mic denied: ' + (err.message || err));
+          window.dictaste.sessionComplete({ text: '' });
+          return;
+        }
+      }
+
+      // Web Speech path (+ optional parallel MediaRecorder for future)
       if (!SR) {
-        setUI(false, 'Speech API unavailable — open Settings');
-        window.dictaste.sessionComplete({ text: '' });
-        return;
+        try {
+          await startMedia();
+          setUI(true, 'Recording (no Web Speech)…');
+          sttMode = 'openai'; // will fail without key; settings hint covers it
+          return;
+        } catch (err) {
+          setUI(false, 'Speech API unavailable — open Settings');
+          window.dictaste.sessionComplete({ text: '' });
+          return;
+        }
       }
       try {
         if (rec) { try { rec.abort(); } catch (_) {} }
@@ -86,11 +154,8 @@
         rec.onerror = (e) => {
           document.getElementById('sub').textContent = 'Mic: ' + (e.error || 'error');
         };
-        rec.onend = () => {
-          /* stop path handled by control */
-        };
         rec.start();
-        setUI(true);
+        setUI(true, 'Web Speech…');
       } catch (err) {
         setUI(false, String(err.message || err));
         window.dictaste.sessionComplete({ text: '' });
@@ -98,22 +163,38 @@
     }
 
     async function stop() {
-      setUI(false, 'Polishing…');
+      setUI(false, 'Processing…');
       try { if (rec) rec.stop(); } catch (_) {}
-      // small delay for final results
       await new Promise((r) => setTimeout(r, 280));
-      const text = (finals.join(' ') + ' ' + interim).replace(/\s+/g, ' ').trim();
-      document.getElementById('partial').textContent = text;
-      await window.dictaste.sessionComplete({ text });
-      setUI(false, 'Pasted · ready');
+      let text = (finals.join(' ') + ' ' + interim).replace(/\s+/g, ' ').trim();
+      let audioBase64 = null;
+      let mime = null;
+      if (mediaRecorder || mediaChunks.length) {
+        const audio = await stopMedia();
+        if (audio) {
+          audioBase64 = audio.base64;
+          mime = audio.mime;
+        }
+      }
+      document.getElementById('partial').textContent = text || (audioBase64 ? 'Transcribing…' : '');
+      const result = await window.dictaste.sessionComplete({ text, audioBase64, mime });
+      if (result?.polished) {
+        document.getElementById('partial').textContent = result.polished;
+        setUI(false, 'Pasted · ready');
+      } else if (result?.error) {
+        setUI(false, result.error);
+      } else {
+        setUI(false, 'Ready');
+      }
       setTimeout(() => setUI(false), 1600);
     }
 
     window.dictaste.onDictateControl((msg) => {
-      if (msg.action === 'start') start();
+      if (msg.action === 'start') start(msg.sttMode);
       if (msg.action === 'stop') stop();
     });
     window.dictaste.onStatus((s) => {
+      if (s.phase === 'transcribing') setUI(false, 'Transcribing…');
       if (s.phase === 'polishing') setUI(false, 'Polishing…');
       if (s.phase === 'idle' && s.last) {
         document.getElementById('partial').textContent = s.last;

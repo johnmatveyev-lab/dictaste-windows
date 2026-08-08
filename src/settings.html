@@ -47,6 +47,22 @@
     <label><input type="checkbox" id="autoPaste" checked /> Auto-paste after dictation</label>
   </div>
 
+  <label>Speech-to-text engine (W1)</label>
+  <select id="sttMode" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--fg);padding:11px 12px;font:inherit;">
+    <option value="webspeech">Web Speech (default · free · online)</option>
+    <option value="openai">OpenAI Whisper API (BYO key · higher quality)</option>
+    <option value="whisper-cli">Offline whisper.cpp CLI (path below)</option>
+  </select>
+
+  <label>OpenAI API key (for Whisper STT mode)</label>
+  <input id="openai" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+
+  <label>whisper-cli binary path (offline)</label>
+  <input id="whisperBin" placeholder="C:\tools\whisper-cli.exe" />
+
+  <label>whisper model path (ggml)</label>
+  <input id="whisperModel" placeholder="C:\models\ggml-base.en.bin" />
+
   <label>Manual transcript (optional)</label>
   <textarea id="text" placeholder="Type or paste text to polish without mic…"></textarea>
 
@@ -59,7 +75,7 @@
 
   <p class="hint">
     Free / Developer (GitHub star + BYO LLM) / Pro plans match Mac.
-    Offline Whisper model is next (W1). This build uses Chromium Web Speech when available.
+    STT: Web Speech by default; OpenAI Whisper or local whisper.cpp for W1 quality path.
   </p>
 
   <script>
@@ -71,11 +87,17 @@
       document.getElementById('api').value = c.apiBase || 'https://dictaste.vercel.app';
       document.getElementById('polish').checked = c.polish !== false;
       document.getElementById('autoPaste').checked = c.autoPaste !== false;
+      document.getElementById('sttMode').value = c.sttMode || 'webspeech';
+      document.getElementById('openai').value = c.openAIKey || '';
+      document.getElementById('whisperBin').value = c.whisperBin || '';
+      document.getElementById('whisperModel').value = c.whisperModel || '';
       window.dictaste.onStatus((s) => {
         listening = !!s.listening;
         document.getElementById('toggle').textContent = listening ? 'Stop dictation' : 'Start dictation';
-        if (s.phase === 'polishing') document.getElementById('status').textContent = 'Polishing…';
+        if (s.phase === 'transcribing') document.getElementById('status').textContent = 'Transcribing…';
+        else if (s.phase === 'polishing') document.getElementById('status').textContent = 'Polishing…';
         else if (s.listening) document.getElementById('status').textContent = 'Listening…';
+        else if (s.error) document.getElementById('status').textContent = s.error;
         else if (s.last) {
           document.getElementById('status').textContent = 'Done';
           document.getElementById('text').value = s.last;
@@ -89,6 +111,10 @@
         apiBase: document.getElementById('api').value.trim() || 'https://dictaste.vercel.app',
         polish: document.getElementById('polish').checked,
         autoPaste: document.getElementById('autoPaste').checked,
+        sttMode: document.getElementById('sttMode').value || 'webspeech',
+        openAIKey: document.getElementById('openai').value.trim(),
+        whisperBin: document.getElementById('whisperBin').value.trim(),
+        whisperModel: document.getElementById('whisperModel').value.trim(),
       });
       document.getElementById('status').textContent = 'Saved';
     }
