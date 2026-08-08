@@ -23,29 +23,75 @@
 <body>
   <div class="tag">Dictaste · Windows MVP</div>
   <h1>Speak it. Ship it.</h1>
-  <p class="hint">Ctrl+Shift+Space toggles listen mode. Paste raw transcript below to polish + insert (full mic STT ships next build).</p>
+  <p class="hint">Ctrl+Shift+Space toggles listen mode. Use <strong>Start mic</strong> for browser STT (Web Speech API), then Polish &amp; paste into the focused app.</p>
   <div id="status"></div>
   <label>License key (from dictaste.vercel.app/dashboard)</label>
   <input id="license" placeholder="fd_live_…" />
   <label>API base</label>
   <input id="api" placeholder="https://dictaste.vercel.app" />
-  <label>Raw text → polish → paste</label>
-  <textarea id="text" placeholder="Dictate or type here…"></textarea>
+  <label>Transcript → polish → paste</label>
+  <textarea id="text" placeholder="Speak or type here…"></textarea>
   <div class="row">
-    <button id="save">Save settings</button>
+    <button id="mic">Start mic</button>
+    <button id="save" class="ghost">Save settings</button>
     <button id="run" class="ghost">Polish & paste</button>
     <button id="dash" class="ghost">Dashboard</button>
   </div>
-  <p class="hint">Same Free / Developer / Pro plans as Mac. Highlight-to-speak coming after W0 hotkey STT.</p>
+  <p class="hint">Same Free / Developer / Pro plans as Mac. Offline Whisper model lands in W1; this MVP uses Chromium speech recognition when available.</p>
   <script>
+    let rec = null;
+    let listening = false;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
     async function boot() {
       const c = await window.dictaste.getConfig();
       document.getElementById('license').value = c.licenseKey || '';
       document.getElementById('api').value = c.apiBase || 'https://dictaste.vercel.app';
       window.dictaste.onStatus((s) => {
-        document.getElementById('status').textContent = s.listening ? 'Listening…' : 'Ready';
+        document.getElementById('status').textContent = s.listening ? 'Hotkey listening…' : 'Ready';
       });
+      if (!SR) {
+        document.getElementById('mic').disabled = true;
+        document.getElementById('status').textContent = 'Web Speech API unavailable — type or paste transcript';
+      }
     }
+
+    document.getElementById('mic').onclick = () => {
+      if (!SR) return;
+      if (listening && rec) {
+        rec.stop();
+        listening = false;
+        document.getElementById('mic').textContent = 'Start mic';
+        document.getElementById('status').textContent = 'Mic stopped';
+        return;
+      }
+      rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-US';
+      rec.onresult = (e) => {
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
+        }
+        if (final) {
+          const ta = document.getElementById('text');
+          ta.value = (ta.value + ' ' + final).trim();
+        }
+      };
+      rec.onerror = (e) => {
+        document.getElementById('status').textContent = 'Mic error: ' + (e.error || 'unknown');
+      };
+      rec.onend = () => {
+        listening = false;
+        document.getElementById('mic').textContent = 'Start mic';
+      };
+      rec.start();
+      listening = true;
+      document.getElementById('mic').textContent = 'Stop mic';
+      document.getElementById('status').textContent = 'Listening (mic)…';
+    };
+
     document.getElementById('save').onclick = async () => {
       await window.dictaste.saveConfig({
         licenseKey: document.getElementById('license').value.trim(),
