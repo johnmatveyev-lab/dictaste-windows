@@ -14,13 +14,15 @@
     "appId": "com.dictaste.windows",
     "productName": "Dictaste",
     "directories": { "output": "dist" },
+    "files": ["src/**/*", "package.json"],
     "win": {
       "target": ["nsis"],
       "artifactName": "Dictaste-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Dictaste"
     }
   },
   "devDependencies": {
