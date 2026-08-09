@@ -14,10 +14,12 @@
   "build": {
     "appId": "com.dictaste.windows",
     "productName": "Dictaste",
-    "directories": { "output": "dist" },
+    "directories": { "output": "dist", "buildResources": "build" },
     "files": ["src/**/*", "package.json"],
+    "icon": "build/icon.ico",
     "win": {
       "target": ["nsis", "zip"],
+      "icon": "build/icon.ico",
       "artifactName": "Dictaste-Setup-${version}.${ext}"
     },
     "nsis": {

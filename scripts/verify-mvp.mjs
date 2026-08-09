@@ -7,7 +7,15 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const need = ["src/main.js", "src/preload.js", "src/settings.html", "src/hud.html", "package.json"];
+const need = [
+  "src/main.js",
+  "src/preload.js",
+  "src/settings.html",
+  "src/hud.html",
+  "package.json",
+  "build/icon.ico",
+  "build/icon.png",
+];
 let bad = 0;
 
 function pass(m) {
@@ -33,6 +41,9 @@ else fail("productName not Dictaste");
 
 if (pkg.build?.appId === "com.dictaste.windows") pass("appId com.dictaste.windows");
 else fail("appId wrong");
+
+if (pkg.build?.icon || pkg.build?.win?.icon) pass("package icon configured");
+else fail("package icon not configured");
 
 for (const s of [
   "dictaste.vercel.app",
