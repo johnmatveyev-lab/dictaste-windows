@@ -8,7 +8,8 @@
     "start": "electron .",
     "verify": "node scripts/verify-mvp.mjs",
     "pack": "electron-builder --win --x64",
-    "dist": "electron-builder --win nsis --x64"
+    "pack:zip": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win zip --x64 --publish never",
+    "dist": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --x64"
   },
   "build": {
     "appId": "com.dictaste.windows",
@@ -16,7 +17,7 @@
     "directories": { "output": "dist" },
     "files": ["src/**/*", "package.json"],
     "win": {
-      "target": ["nsis"],
+      "target": ["nsis", "zip"],
       "artifactName": "Dictaste-Setup-${version}.${ext}"
     },
     "nsis": {

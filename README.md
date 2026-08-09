@@ -27,9 +27,19 @@ npm start
 - Polish via `/api/v1/polish` · auto-paste  
 - Settings: license, API base, STT mode  
 
-## Package installer (on Windows)
+## Download (developer preview)
 
-```powershell
+- Portable zip: [v0.1.0-preview](https://github.com/johnmatveyev-lab/dictaste-windows/releases/tag/v0.1.0-preview) → unzip → `Dictaste.exe`
+- Site: https://dictaste.vercel.app/download
+
+## Package
+
+```bash
+# Portable zip (works on macOS/Linux/Windows hosts)
+npm run pack:zip
+# → dist/Dictaste-Setup-0.1.0.zip
+
+# NSIS installer (Windows host or GitHub Actions)
 npm run dist
 # → dist/Dictaste-Setup-0.1.0.exe
 ```
