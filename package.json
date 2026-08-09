@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Dictaste for Windows — hold-to-talk MVP",
+  "author": "Dictaste <support@dictaste.com>",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
